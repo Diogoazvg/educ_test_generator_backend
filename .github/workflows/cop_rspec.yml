@@ -1,0 +1,86 @@
+name: Rspec Test
+
+env:
+  RUBY_VERSION: 3.2.2
+  DB_USERNAME: postgres
+  DB_PASS: postgres
+
+  CI_REPORTS: coverage/testresults
+  COVERAGE_REPORTS: coverage
+  BUNDLE_PATH: ${{ github.workspace }}/.bundle
+
+on:
+  pull_request:
+    branches: [staging, master]
+    types: [opened, synchronize]
+
+jobs:
+  rspec-test:
+    name: Runner Rspec
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set environment variables
+        run: |
+          echo "BRANCH=${GITHUB_REF##*/}" >> $GITHUB_ENV
+
+      - name: Use environment variables
+        run: |
+          echo "BRANCH=${BRANCH}"
+
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Build the stack
+        run: docker-compose -f docker-compose.yml up -d
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ env.RUBY_VERSION }}
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get -yqq install libpq-dev
+
+      - name: Cache Ruby Gems
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.BUNDLE_PATH }}
+          key: ${{ runner.os }}-gems-${{ hashFiles('**/Gemfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-gems-
+
+      - name: Install dependencies
+        run: |
+          gem install bundler --no-document
+          bundle config path ${{ env.BUNDLE_PATH }}
+          bundle install --jobs 4 --retry 3
+
+      - name: Run Tests
+        env:
+          DBUSER: ${{ env.DB_USERNAME }}
+          DBPASS: ${{ env.DB_PASS }}
+          RAILS_ENV: test
+        run: |
+          bash -c "source ./rspec_test.sh" --trace
+          bundle exec rake report:simplecov
+
+      - name: Coverage Reporter(Only changed)
+        uses: 5monkeys/cobertura-action@master
+        with:
+          path: coverage/coverage.xml
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          minimum_coverage: 100
+          only_changed_files: true
+          show_line: true
+          report_name: Only changed files below 100 coverage
+          show_missing_max_length: 30
+
+      - name: Coverage Reporter(All Files)
+        uses: 5monkeys/cobertura-action@master
+        with:
+          path: coverage/coverage.xml
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          minimum_coverage: 100
+          show_line: true
+          report_name: All files below 100 coverage
+          show_missing_max_length: 30
