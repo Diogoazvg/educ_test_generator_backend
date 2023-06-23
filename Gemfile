@@ -6,6 +6,7 @@ git_source(:github) { |repo| "https://github.com/#{repo}.git" }
 ruby '3.2.2'
 
 gem 'bootsnap', require: false
+gem 'cpf_cnpj', '~> 0.2.1'
 gem 'graphql', '~> 2.0', '>= 2.0.22'
 gem 'interactor', '~> 3.1', '>= 3.1.2'
 gem 'pg', '~> 1.1'
